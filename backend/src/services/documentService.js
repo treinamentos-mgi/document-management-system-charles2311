@@ -7,8 +7,9 @@ function toPublicDocument({ storedName, ...document }) {
   return document;
 }
 
-function registerUpload({ file, owner }) {
-  const metadata = {
+// Monta os metadados a partir do arquivo recebido pelo multer.
+function buildMetadata(file, owner) {
+  return {
     id: randomUUID(),
     originalName: file.originalname,
     size: file.size,
@@ -16,7 +17,29 @@ function registerUpload({ file, owner }) {
     owner,
     storedName: file.filename,
   };
+}
 
+function byMostRecentUpload(a, b) {
+  return b.uploadedAt.localeCompare(a.uploadedAt);
+}
+
+// Documentos de outros donos são tratados como inexistentes para não revelar sua existência.
+function findOwnedDocumentOrThrow(id, owner) {
+  const document = documentRepository.findById(id);
+  if (!document || document.owner !== owner) {
+    throw new NotFoundError('Documento não encontrado.');
+  }
+  return document;
+}
+
+async function ensureFileExists(storedName) {
+  if (!(await documentRepository.fileExists(storedName))) {
+    throw new NotFoundError('Arquivo do documento não foi encontrado no armazenamento.');
+  }
+}
+
+function registerUpload({ file, owner }) {
+  const metadata = buildMetadata(file, owner);
   documentRepository.save(metadata);
   return toPublicDocument(metadata);
 }
@@ -25,19 +48,13 @@ function listDocumentsByOwner(owner) {
   return documentRepository
     .findAll()
     .filter((document) => document.owner === owner)
-    .sort((a, b) => b.uploadedAt.localeCompare(a.uploadedAt))
+    .sort(byMostRecentUpload)
     .map(toPublicDocument);
 }
 
-async function getDocumentForDownload(id) {
-  const document = documentRepository.findById(id);
-  if (!document) {
-    throw new NotFoundError('Documento não encontrado.');
-  }
-
-  if (!(await documentRepository.fileExists(document.storedName))) {
-    throw new NotFoundError('Arquivo do documento não foi encontrado no armazenamento.');
-  }
+async function getDocumentForDownload(id, owner) {
+  const document = findOwnedDocumentOrThrow(id, owner);
+  await ensureFileExists(document.storedName);
 
   return {
     filePath: documentRepository.getFilePath(document.storedName),

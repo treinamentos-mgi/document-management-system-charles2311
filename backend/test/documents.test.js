@@ -92,6 +92,21 @@ test('download retorna o conteúdo original com Content-Disposition', async () =
   assert.match(response.headers.get('content-type'), /^text\/plain/);
 });
 
+test('download de documento de outro dono retorna 404', async () => {
+  const uploadResponse = await uploadFile({ name: 'privado.txt', owner: 'dono-real' });
+  const { id } = await uploadResponse.json();
+
+  const intruder = await fetch(`${baseUrl}/documents/${id}/download`, {
+    headers: { 'X-User-Id': 'intruso' },
+  });
+  const owner = await fetch(`${baseUrl}/documents/${id}/download`, {
+    headers: { 'X-User-Id': 'dono-real' },
+  });
+
+  assert.strictEqual(intruder.status, 404);
+  assert.strictEqual(owner.status, 200);
+});
+
 test('download de id inexistente retorna 404', async () => {
   const response = await fetch(`${baseUrl}/documents/nao-existe/download`);
   const body = await response.json();

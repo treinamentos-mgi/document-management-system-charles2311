@@ -21,7 +21,10 @@ function list(req, res) {
 
 async function download(req, res, next) {
   try {
-    const { filePath, originalName } = await documentService.getDocumentForDownload(req.params.id);
+    const { filePath, originalName } = await documentService.getDocumentForDownload(
+      req.params.id,
+      getOwner(req),
+    );
     // attachment() define Content-Type pela extensão do nome original, já que o arquivo gravado não tem extensão.
     res.attachment(originalName);
     res.sendFile(filePath, (err) => {
